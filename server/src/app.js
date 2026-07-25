@@ -10,6 +10,7 @@ import logger from './utils/logger.js';
 import { NotFoundError } from './utils/errors.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import passengerRoutes from './modules/passengers/passenger.routes.js';
+import driverRoutes from './modules/drivers/driver.routes.js';
 import { authenticate, authorize } from './modules/auth/auth.middleware.js';
 
 // Load environment variables
@@ -33,6 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 // Register routes
 app.use('/api/auth', authRoutes);
 app.use('/api/passengers', passengerRoutes);
+app.use('/api/drivers', driverRoutes);
 
 // Test endpoints for Auth/RBAC validation
 if (process.env.NODE_ENV === 'test') {

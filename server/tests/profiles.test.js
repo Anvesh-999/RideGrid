@@ -130,3 +130,136 @@ describe('Passenger Domain - Profile Endpoints', () => {
     expect(res.body.success).toBe(false);
   });
 });
+
+describe('Driver Domain - Profile & Vehicle Endpoints', () => {
+  let passengerToken;
+  let driverToken;
+  let driverUser;
+  let DriverProfile;
+  let Vehicle;
+
+  beforeAll(async () => {
+    const driverProfileModule = await import('../src/modules/drivers/driverProfile.model.js');
+    DriverProfile = driverProfileModule.default;
+    const vehicleModule = await import('../src/modules/vehicles/vehicle.model.js');
+    Vehicle = vehicleModule.default;
+
+    if (mongoose.connection.readyState === 0) {
+      const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
+      await mongoose.connect(mongoUri);
+    }
+
+    await User.deleteMany({});
+    await DriverProfile.deleteMany({});
+    await Vehicle.deleteMany({});
+
+    // Register & Login Passenger
+    const pReg = await request(app).post('/api/auth/register').send({
+      name: 'Passenger Bob',
+      email: 'bob@example.com',
+      password: 'password123',
+      role: 'PASSENGER'
+    });
+    passengerToken = pReg.body.data.accessToken;
+
+    // Register & Login Driver
+    const dReg = await request(app).post('/api/auth/register').send({
+      name: 'Driver Dan',
+      email: 'dan@example.com',
+      password: 'password123',
+      role: 'DRIVER'
+    });
+    driverUser = dReg.body.data.user;
+    driverToken = dReg.body.data.accessToken;
+  });
+
+  afterAll(async () => {
+    await mongoose.connection.close();
+    await redisClient.quit();
+  });
+
+  it('should deny driver endpoint access to passengers', async () => {
+    const res = await request(app)
+      .get('/api/drivers/me')
+      .set('Authorization', `Bearer ${passengerToken}`);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('should get current driver profile (lazily initialized)', async () => {
+    const res = await request(app)
+      .get('/api/drivers/me')
+      .set('Authorization', `Bearer ${driverToken}`);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.onlineStatus).toBe('OFFLINE');
+    expect(res.body.data.availabilityStatus).toBe('OFFLINE');
+    expect(res.body.data.vehicleId).toBeNull();
+  });
+
+  it('should reject status update to ONLINE if no vehicle is registered', async () => {
+    const res = await request(app)
+      .post('/api/drivers/status')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ onlineStatus: 'ONLINE' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe('VEHICLE_REQUIRED');
+  });
+
+  it('should register a vehicle successfully for the driver', async () => {
+    const vehicleData = {
+      make: 'Toyota',
+      model: 'Prius',
+      licensePlate: 'ABC1234',
+      type: 'ECONOMY',
+      capacity: 4
+    };
+
+    const res = await request(app)
+      .post('/api/drivers/me/vehicle')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send(vehicleData);
+
+    expect(res.statusCode).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.make).toBe(vehicleData.make);
+    expect(res.body.data.licensePlate).toBe(vehicleData.licensePlate);
+
+    // Verify linkage in DriverProfile
+    const profile = await DriverProfile.findOne({ userId: driverUser.id || driverUser._id });
+    expect(profile.vehicleId).toBeDefined();
+    expect(profile.vehicleId.toString()).toBe(res.body.data._id);
+  });
+
+  it('should allow driver to go ONLINE/AVAILABLE once a vehicle is registered', async () => {
+    const res = await request(app)
+      .post('/api/drivers/status')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ onlineStatus: 'ONLINE' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data.onlineStatus).toBe('ONLINE');
+    expect(res.body.data.availabilityStatus).toBe('AVAILABLE');
+  });
+
+  it('should reject invalid status transitions (e.g. AVAILABLE to ON_TRIP directly)', async () => {
+    const res = await request(app)
+      .post('/api/drivers/status')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ availabilityStatus: 'ON_TRIP' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe('INVALID_STATUS_TRANSITION');
+  });
+
+  it('should allow valid transitions (e.g. AVAILABLE to RESERVED)', async () => {
+    const res = await request(app)
+      .post('/api/drivers/status')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ availabilityStatus: 'RESERVED' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data.availabilityStatus).toBe('RESERVED');
+  });
+});
