@@ -4,13 +4,24 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { redisClient } from './config/redis.js';
+import requestId from './middlewares/requestId.js';
+import errorHandler from './middlewares/errorHandler.js';
+import logger from './utils/logger.js';
+import { NotFoundError } from './utils/errors.js';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
 
-// Middlewares
+// Set up request ID tracing and logging first
+app.use(requestId);
+app.use((req, res, next) => {
+  logger.info(`[HTTP] Incoming ${req.method} ${req.path}`, { requestId: req.id });
+  next();
+});
+
+// Security & Parsing Middlewares
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
@@ -48,15 +59,12 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Fallback Route for 404
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: {
-      code: 'NOT_FOUND',
-      message: 'The requested resource does not exist.'
-    }
-  });
+// Fallback Route for 404 (throws NotFoundError to be caught by errorHandler)
+app.use((req, res, next) => {
+  next(new NotFoundError());
 });
+
+// Centralized Error Handler
+app.use(errorHandler);
 
 export default app;

@@ -1,4 +1,5 @@
 import { createClient } from 'redis';
+import logger from '../utils/logger.js';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
@@ -29,13 +30,13 @@ class MockRedisClient {
   async connect() {
     this.isReady = true;
     this.isOpen = true;
-    console.log('[Cache] [MOCK] Resilient in-memory Mock Redis Client ready');
+    logger.info('[Cache] [MOCK] Resilient in-memory Mock Redis Client ready');
   }
 
   async quit() {
     this.isReady = false;
     this.isOpen = false;
-    console.log('[Cache] [MOCK] Mock Redis client connection closed.');
+    logger.info('[Cache] [MOCK] Mock Redis client connection closed.');
   }
 
   async get(key) {
@@ -164,7 +165,15 @@ const redisClient = {
   expire(key, seconds) { return activeClient.expire(key, seconds); },
   geoAdd(key, longitude, latitude, member) { return activeClient.geoAdd(key, longitude, latitude, member); },
   geoSearch(key, from, options) { return activeClient.geoSearch(key, from, options); },
-  quit() { return activeClient.quit(); }
+  async quit() {
+    if (activeClient && activeClient.isOpen) {
+      try {
+        await activeClient.quit();
+      } catch (err) {
+        // Silently catch error if client is already closed
+      }
+    }
+  }
 };
 
 const connectRedis = async () => {
@@ -173,12 +182,12 @@ const connectRedis = async () => {
   });
 
   try {
-    console.log('[Cache] Attempting to connect to Redis...');
+    logger.info('[Cache] Attempting to connect to Redis...');
     await realRedisClient.connect();
-    console.log('[Cache] Redis Connected successfully');
+    logger.info('[Cache] Redis Connected successfully');
   } catch (error) {
-    console.warn(`[Cache] Redis connection failed: ${error.message}`);
-    console.warn('[Cache] Swapping to In-Memory Mock Redis Client');
+    logger.warn(`[Cache] Redis connection failed: ${error.message}`);
+    logger.warn('[Cache] Swapping to In-Memory Mock Redis Client');
     activeClient = mockRedisClient;
     await activeClient.connect();
   }

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import app from './app.js';
 import connectDB from './config/db.js';
 import { connectRedis, redisClient } from './config/redis.js';
+import logger from './utils/logger.js';
 
 const PORT = process.env.PORT || 5000;
 
@@ -10,35 +11,35 @@ await connectDB();
 await connectRedis();
 
 const server = app.listen(PORT, () => {
-  console.log(`[Server] RideGrid dispatch engine running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  logger.info(`[Server] RideGrid dispatch engine running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
 });
 
 // Handle graceful shutdown
 const shutdown = async () => {
-  console.log('[Server] Gracefully shutting down...');
+  logger.info('[Server] Gracefully shutting down...');
   
   try {
     await mongoose.connection.close();
-    console.log('[Database] MongoDB connection closed.');
+    logger.info('[Database] MongoDB connection closed.');
   } catch (err) {
-    console.error(`[Database] Error closing MongoDB connection: ${err.message}`);
+    logger.error(`[Database] Error closing MongoDB connection: ${err.message}`);
   }
 
   try {
     await redisClient.quit();
-    console.log('[Cache] Redis connection closed.');
+    logger.info('[Cache] Redis connection closed.');
   } catch (err) {
-    console.error(`[Cache] Error closing Redis connection: ${err.message}`);
+    logger.error(`[Cache] Error closing Redis connection: ${err.message}`);
   }
 
   server.close(() => {
-    console.log('[Server] Server closed. Process terminating.');
+    logger.info('[Server] Server closed. Process terminating.');
     process.exit(0);
   });
 
   // Force close after 10 seconds
   setTimeout(() => {
-    console.error('[Server] Could not close connections in time, forcefully shutting down');
+    logger.error('[Server] Could not close connections in time, forcefully shutting down');
     process.exit(1);
   }, 10000);
 };
@@ -47,10 +48,10 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('[Server] Unhandled Rejection', { promise, reason });
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('[Server] Uncaught Exception:', error);
+  logger.error('[Server] Uncaught Exception', error);
   shutdown();
 });

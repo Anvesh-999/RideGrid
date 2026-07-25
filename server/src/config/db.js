@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import logger from '../utils/logger.js';
 
 const connectDB = async () => {
   const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
@@ -6,23 +7,23 @@ const connectDB = async () => {
   try {
     const conn = await mongoose.connect(mongoUri);
 
-    console.log(`[Database] MongoDB Connected: ${conn.connection.host}/${conn.connection.name}`);
+    logger.info(`[Database] MongoDB Connected: ${conn.connection.host}/${conn.connection.name}`);
 
     // Monitor connection events
     mongoose.connection.on('error', (err) => {
-      console.error(`[Database] MongoDB connection error: ${err.message}`);
+      logger.error(`[Database] MongoDB connection error: ${err.message}`);
     });
 
     mongoose.connection.on('disconnected', () => {
-      console.warn('[Database] MongoDB disconnected');
+      logger.warn('[Database] MongoDB disconnected');
     });
 
     mongoose.connection.on('reconnected', () => {
-      console.log('[Database] MongoDB reconnected');
+      logger.info('[Database] MongoDB reconnected');
     });
 
   } catch (error) {
-    console.error(`[Database] MongoDB initial connection error: ${error.message}`);
+    logger.error(`[Database] MongoDB initial connection error: ${error.message}`);
     process.exit(1);
   }
 };
