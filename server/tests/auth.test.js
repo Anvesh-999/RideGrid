@@ -2,10 +2,11 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import app from '../src/app.js';
 import User from '../src/modules/users/user.model.js';
-import { redisClient } from '../src/config/redis.js';
+import { redisClient, connectRedis } from '../src/config/redis.js';
 
 describe('Auth Module - Registration', () => {
   beforeAll(async () => {
+    await connectRedis();
     if (mongoose.connection.readyState === 0) {
       const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
       await mongoose.connect(mongoUri);
@@ -205,6 +206,7 @@ describe('Auth Module - Token Rotation & Logout', () => {
   let loginData;
 
   beforeAll(async () => {
+    await connectRedis();
     if (mongoose.connection.readyState === 0) {
       const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
       await mongoose.connect(mongoUri);
@@ -318,6 +320,7 @@ describe('Auth Module - RBAC Middleware', () => {
   let adminToken;
 
   beforeAll(async () => {
+    await connectRedis();
     if (mongoose.connection.readyState === 0) {
       const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
       await mongoose.connect(mongoUri);

@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import app from '../src/app.js';
 import User from '../src/modules/users/user.model.js';
 import PassengerProfile from '../src/modules/passengers/passengerProfile.model.js';
-import { redisClient } from '../src/config/redis.js';
+import { redisClient, connectRedis } from '../src/config/redis.js';
 
 describe('Passenger Domain - Profile Endpoints', () => {
   let passengerToken;
@@ -11,6 +11,7 @@ describe('Passenger Domain - Profile Endpoints', () => {
   let passengerUser;
 
   beforeAll(async () => {
+    await connectRedis();
     if (mongoose.connection.readyState === 0) {
       const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
       await mongoose.connect(mongoUri);
@@ -144,6 +145,7 @@ describe('Driver Domain - Profile & Vehicle Endpoints', () => {
     const vehicleModule = await import('../src/modules/vehicles/vehicle.model.js');
     Vehicle = vehicleModule.default;
 
+    await connectRedis();
     if (mongoose.connection.readyState === 0) {
       const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
       await mongoose.connect(mongoUri);

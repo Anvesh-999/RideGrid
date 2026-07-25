@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import app from './app.js';
 import connectDB from './config/db.js';
 import { connectRedis, redisClient } from './config/redis.js';
+import { initSocket } from './sockets/index.js';
 import logger from './utils/logger.js';
 
 const PORT = process.env.PORT || 5000;
@@ -13,6 +14,9 @@ await connectRedis();
 const server = app.listen(PORT, () => {
   logger.info(`[Server] RideGrid dispatch engine running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
 });
+
+// Initialize Socket.IO
+initSocket(server);
 
 // Handle graceful shutdown
 const shutdown = async () => {

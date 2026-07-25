@@ -163,8 +163,23 @@ const redisClient = {
   set(key, value, options) { return activeClient.set(key, value, options); },
   del(key) { return activeClient.del(key); },
   expire(key, seconds) { return activeClient.expire(key, seconds); },
-  geoAdd(key, longitude, latitude, member) { return activeClient.geoAdd(key, longitude, latitude, member); },
-  geoSearch(key, from, options) { return activeClient.geoSearch(key, from, options); },
+  geoAdd(key, longitude, latitude, member) {
+    if (activeClient === realRedisClient) {
+      if (typeof longitude === 'object') {
+        return activeClient.geoAdd(key, longitude);
+      }
+      return activeClient.geoAdd(key, { longitude, latitude, member });
+    }
+    return activeClient.geoAdd(key, longitude, latitude, member);
+  },
+  geoSearch(key, from, options = {}) {
+    if (activeClient === realRedisClient) {
+      const radius = options.radius || 10;
+      const unit = options.unit || 'km';
+      return activeClient.geoSearch(key, from, { radius, unit });
+    }
+    return activeClient.geoSearch(key, from, options);
+  },
   async quit() {
     if (activeClient && activeClient.isOpen) {
       try {
@@ -177,6 +192,10 @@ const redisClient = {
 };
 
 const connectRedis = async () => {
+  if (activeClient && activeClient.isOpen) {
+    return;
+  }
+
   realRedisClient.on('error', () => {
     // Suppress console crash on connection failure
   });

@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import app from '../src/app.js';
 import User from '../src/modules/users/user.model.js';
 import Ride from '../src/modules/rides/ride.model.js';
-import { redisClient } from '../src/config/redis.js';
+import { redisClient, connectRedis } from '../src/config/redis.js';
 
 describe('Ride Core Domain - Ride Lifecycle & Fare Endpoints', () => {
   let passengerToken;
@@ -17,6 +17,7 @@ describe('Ride Core Domain - Ride Lifecycle & Fare Endpoints', () => {
     const rideServiceModule = await import('../src/modules/rides/ride.service.js');
     transitionRideStatus = rideServiceModule.transitionRideStatus;
 
+    await connectRedis();
     if (mongoose.connection.readyState === 0) {
       const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
       await mongoose.connect(mongoUri);
