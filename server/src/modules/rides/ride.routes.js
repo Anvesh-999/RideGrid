@@ -13,8 +13,10 @@ router.post('/estimate', rideController.getEstimate);
 // Creation endpoint (restricted to PASSENGER role only)
 router.post('/', authorize('PASSENGER'), rideController.createRequest);
 
-// Lookup and cancellation endpoints (accessible to all authenticated roles)
+// Lookup, status update and cancellation endpoints (accessible to all authenticated roles)
+router.get('/', rideController.getRides);
 router.get('/:id', rideController.getDetails);
+router.patch('/:id/status', rideController.transitionStatus);
 router.post('/:id/cancel', rideController.cancel);
 
 export default router;

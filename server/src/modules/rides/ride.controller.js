@@ -84,3 +84,76 @@ export const cancel = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Transition ride status
+ */
+export const transitionStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status, driverId } = req.body;
+    
+    logger.info(`[Ride] Status transition requested for ride ID: ${id} to state: ${status}`, { requestId: req.id });
+
+    const metadata = {};
+    if (driverId) {
+      metadata.driverId = driverId;
+    } else if (req.user.role === 'DRIVER') {
+      metadata.driverId = req.user.userId;
+    }
+
+    const ride = await rideService.transitionRideStatus(id, status, metadata);
+
+    logger.info(`[Ride] Ride ID: ${id} successfully transitioned to: ${status}`, { requestId: req.id });
+
+    // Publish WebSocket notification
+    try {
+      const { getIo } = await import('../../sockets/index.js');
+      const io = getIo();
+      const pId = ride.passengerId._id || ride.passengerId;
+      io.to(`user:${pId}`).emit('ride:status_changed', ride);
+      if (ride.driverId) {
+        const dId = ride.driverId._id || ride.driverId;
+        io.to(`user:${dId}`).emit('ride:status_changed', ride);
+      }
+    } catch (socketErr) {
+      logger.warn(`[Ride] Socket notification failed for transition: ${socketErr.message}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: ride
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Retrieve a list of rides based on queries
+ */
+export const getRides = async (req, res, next) => {
+  try {
+    const { status, passengerId, driverId } = req.query;
+    logger.info('[Ride] Querying ride list request received', { requestId: req.id });
+
+    const filters = {};
+    if (status) filters.status = status;
+    
+    if (req.user.role === 'PASSENGER') {
+      filters.passengerId = req.user.userId;
+    } else {
+      if (passengerId) filters.passengerId = passengerId;
+      if (driverId) filters.driverId = driverId;
+    }
+
+    const rides = await rideService.queryRides(filters);
+
+    res.status(200).json({
+      success: true,
+      data: rides
+    });
+  } catch (error) {
+    next(error);
+  }
+};

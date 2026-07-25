@@ -124,3 +124,18 @@ export const transitionRideStatus = async (rideId, targetStatus, metadata = {}) 
 export const cancelRide = async (rideId, actor, reason) => {
   return transitionRideStatus(rideId, 'CANCELLED', { actor, reason });
 };
+
+/**
+ * Query rides based on filters
+ */
+export const queryRides = async (filters = {}) => {
+  const query = {};
+  if (filters.status) query.status = filters.status;
+  if (filters.passengerId) query.passengerId = filters.passengerId;
+  if (filters.driverId) query.driverId = filters.driverId;
+
+  return Ride.find(query)
+    .populate('passengerId', 'name email')
+    .populate('driverId', 'name email')
+    .sort({ requestedAt: -1 });
+};
