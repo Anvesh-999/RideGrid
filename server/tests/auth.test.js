@@ -107,3 +107,90 @@ describe('Auth Module - Registration', () => {
     expect(res.body.error.code).toBe('EMAIL_ALREADY_EXISTS');
   });
 });
+
+describe('Auth Module - Login', () => {
+  const userData = {
+    name: 'Login User',
+    email: 'login@example.com',
+    password: 'password123'
+  };
+
+  beforeAll(async () => {
+    if (mongoose.connection.readyState === 0) {
+      const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
+      await mongoose.connect(mongoUri);
+    }
+  });
+
+  afterAll(async () => {
+    await mongoose.connection.close();
+    await redisClient.quit();
+  });
+
+  beforeEach(async () => {
+    await User.deleteMany({});
+    // Pre-register test user
+    await request(app)
+      .post('/api/auth/register')
+      .send(userData);
+  });
+
+  it('should login successfully with correct credentials', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: userData.email,
+        password: userData.password
+      });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toHaveProperty('user');
+    expect(res.body.data).toHaveProperty('accessToken');
+    expect(res.body.data).toHaveProperty('refreshToken');
+
+    const { user } = res.body.data;
+    expect(user.email).toBe(userData.email);
+    expect(user).not.toHaveProperty('password');
+    expect(user).not.toHaveProperty('refreshToken');
+  });
+
+  it('should return 401 unauthorized if password is incorrect', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: userData.email,
+        password: 'wrongpassword'
+      });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('should return 401 unauthorized if email is not registered', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: 'unregistered@example.com',
+        password: userData.password
+      });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('should return 400 validation error if input fields are missing', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: '',
+        password: ''
+      });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+});

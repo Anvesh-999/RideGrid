@@ -22,9 +22,22 @@ export const register = async (req, res, next) => {
 };
 
 /**
- * Login handler placeholder
+ * Handle user login requests
  */
 export const login = async (req, res, next) => {
-  // To be implemented
-  res.status(501).json({ success: false, message: 'Not Implemented' });
+  try {
+    const { email, password } = req.body;
+    logger.info(`[Auth] Login attempt for email: ${email}`, { requestId: req.id });
+
+    const result = await authService.login(email, password);
+
+    logger.info(`[Auth] Login successful for user ID: ${result.user.id || result.user._id}`, { requestId: req.id });
+
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
 };

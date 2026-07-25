@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import * as authController from './auth.controller.js';
-import { registerValidator } from './auth.validator.js';
+import { registerValidator, loginValidator } from './auth.validator.js';
 
 const router = Router();
 
 // Registration endpoint with input validation middleware
 router.post('/register', registerValidator, authController.register);
+
+// Login endpoint with input validation middleware
+router.post('/login', loginValidator, authController.login);
 
 export default router;

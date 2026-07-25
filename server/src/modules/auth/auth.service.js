@@ -70,8 +70,36 @@ export const register = async (userData) => {
 };
 
 /**
- * Login helper placeholder (will detail in next step)
+ * Login user and generate tokens
  */
 export const login = async (email, password) => {
-  // To be implemented in next step
+  // Find user by email and explicitly include password field
+  const user = await User.findOne({ email }).select('+password');
+  
+  if (!user) {
+    throw new UnauthorizedError('Invalid email or password');
+  }
+
+  // Verify password
+  const isMatch = await user.comparePassword(password);
+  if (!isMatch) {
+    throw new UnauthorizedError('Invalid email or password');
+  }
+
+  // Generate tokens
+  const tokens = generateTokens(user);
+
+  // Store refresh token
+  user.refreshToken = tokens.refreshToken;
+  await user.save();
+
+  // Format user output
+  const userJson = user.toJSON();
+  delete userJson.password;
+  delete userJson.refreshToken;
+
+  return {
+    user: userJson,
+    ...tokens
+  };
 };
