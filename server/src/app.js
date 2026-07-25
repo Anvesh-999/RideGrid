@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -16,10 +17,26 @@ app.use(express.urlencoded({ extended: true }));
 
 // Basic Health Check Route
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'UP',
+  const dbStatus = mongoose.connection.readyState;
+  const dbStates = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+
+  const isDbConnected = dbStatus === 1;
+
+  res.status(isDbConnected ? 200 : 503).json({
+    status: isDbConnected ? 'UP' : 'DEGRADED',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    services: {
+      database: {
+        status: dbStates[dbStatus] || 'unknown',
+        connected: isDbConnected
+      }
+    }
   });
 });
 

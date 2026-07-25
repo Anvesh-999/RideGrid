@@ -1,14 +1,27 @@
+import mongoose from 'mongoose';
 import app from './app.js';
+import connectDB from './config/db.js';
 
 const PORT = process.env.PORT || 5000;
+
+// Initialize database connection
+await connectDB();
 
 const server = app.listen(PORT, () => {
   console.log(`[Server] RideGrid dispatch engine running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
 });
 
 // Handle graceful shutdown
-const shutdown = () => {
+const shutdown = async () => {
   console.log('[Server] Gracefully shutting down...');
+  
+  try {
+    await mongoose.connection.close();
+    console.log('[Database] MongoDB connection closed.');
+  } catch (err) {
+    console.error(`[Database] Error closing MongoDB connection: ${err.message}`);
+  }
+
   server.close(() => {
     console.log('[Server] Server closed. Process terminating.');
     process.exit(0);
