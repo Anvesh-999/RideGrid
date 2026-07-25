@@ -9,6 +9,7 @@ import errorHandler from './middlewares/errorHandler.js';
 import logger from './utils/logger.js';
 import { NotFoundError } from './utils/errors.js';
 import authRoutes from './modules/auth/auth.routes.js';
+import { authenticate, authorize } from './modules/auth/auth.middleware.js';
 
 // Load environment variables
 dotenv.config();
@@ -30,6 +31,21 @@ app.use(express.urlencoded({ extended: true }));
 
 // Register routes
 app.use('/api/auth', authRoutes);
+
+// Test endpoints for Auth/RBAC validation
+if (process.env.NODE_ENV === 'test') {
+  app.get('/api/test/auth-only', authenticate, (req, res) => {
+    res.status(200).json({ success: true, message: 'Authenticated', user: req.user });
+  });
+  
+  app.get('/api/test/driver-only', authenticate, authorize('DRIVER'), (req, res) => {
+    res.status(200).json({ success: true, message: 'Driver access granted' });
+  });
+
+  app.get('/api/test/admin-only', authenticate, authorize('ADMIN'), (req, res) => {
+    res.status(200).json({ success: true, message: 'Admin access granted' });
+  });
+}
 
 // Basic Health Check Route
 app.get('/health', (req, res) => {

@@ -311,3 +311,119 @@ describe('Auth Module - Token Rotation & Logout', () => {
     expect(refreshRes.statusCode).toBe(401);
   });
 });
+
+describe('Auth Module - RBAC Middleware', () => {
+  let passengerToken;
+  let driverToken;
+  let adminToken;
+
+  beforeAll(async () => {
+    if (mongoose.connection.readyState === 0) {
+      const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
+      await mongoose.connect(mongoUri);
+    }
+
+    await User.deleteMany({});
+
+    // Register & Login Passenger
+    await request(app).post('/api/auth/register').send({
+      name: 'Passenger User',
+      email: 'passenger@example.com',
+      password: 'password123',
+      role: 'PASSENGER'
+    });
+    const pLogin = await request(app).post('/api/auth/login').send({
+      email: 'passenger@example.com',
+      password: 'password123'
+    });
+    passengerToken = pLogin.body.data.accessToken;
+
+    // Register & Login Driver
+    await request(app).post('/api/auth/register').send({
+      name: 'Driver User',
+      email: 'driver@example.com',
+      password: 'password123',
+      role: 'DRIVER'
+    });
+    const dLogin = await request(app).post('/api/auth/login').send({
+      email: 'driver@example.com',
+      password: 'password123'
+    });
+    driverToken = dLogin.body.data.accessToken;
+
+    // Register & Login Admin
+    await request(app).post('/api/auth/register').send({
+      name: 'Admin User',
+      email: 'admin@example.com',
+      password: 'password123',
+      role: 'ADMIN'
+    });
+    const aLogin = await request(app).post('/api/auth/login').send({
+      email: 'admin@example.com',
+      password: 'password123'
+    });
+    adminToken = aLogin.body.data.accessToken;
+  });
+
+  afterAll(async () => {
+    await mongoose.connection.close();
+    await redisClient.quit();
+  });
+
+  it('should deny access to auth-only route if authorization header is missing', async () => {
+    const res = await request(app).get('/api/test/auth-only');
+    expect(res.statusCode).toBe(401);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('should deny access to auth-only route if authorization token is invalid', async () => {
+    const res = await request(app)
+      .get('/api/test/auth-only')
+      .set('Authorization', 'Bearer invalid-access-token');
+    expect(res.statusCode).toBe(401);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('should grant access to auth-only route if token is valid', async () => {
+    const res = await request(app)
+      .get('/api/test/auth-only')
+      .set('Authorization', `Bearer ${passengerToken}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.user.email).toBe('passenger@example.com');
+  });
+
+  it('should deny access to driver-only route for passenger role', async () => {
+    const res = await request(app)
+      .get('/api/test/driver-only')
+      .set('Authorization', `Bearer ${passengerToken}`);
+    expect(res.statusCode).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('should grant access to driver-only route for driver role', async () => {
+    const res = await request(app)
+      .get('/api/test/driver-only')
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('should deny access to admin-only route for driver role', async () => {
+    const res = await request(app)
+      .get('/api/test/admin-only')
+      .set('Authorization', `Bearer ${driverToken}`);
+    expect(res.statusCode).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('should grant access to admin-only route for admin role', async () => {
+    const res = await request(app)
+      .get('/api/test/admin-only')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
