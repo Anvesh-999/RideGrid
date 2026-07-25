@@ -8,6 +8,7 @@ import requestId from './middlewares/requestId.js';
 import errorHandler from './middlewares/errorHandler.js';
 import logger from './utils/logger.js';
 import { NotFoundError } from './utils/errors.js';
+import authRoutes from './modules/auth/auth.routes.js';
 
 // Load environment variables
 dotenv.config();
@@ -26,6 +27,9 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Register routes
+app.use('/api/auth', authRoutes);
 
 // Basic Health Check Route
 app.get('/health', (req, res) => {
