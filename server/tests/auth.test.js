@@ -194,3 +194,120 @@ describe('Auth Module - Login', () => {
     expect(res.body.error.code).toBe('VALIDATION_FAILED');
   });
 });
+
+describe('Auth Module - Token Rotation & Logout', () => {
+  const userData = {
+    name: 'Token User',
+    email: 'token@example.com',
+    password: 'password123'
+  };
+
+  let loginData;
+
+  beforeAll(async () => {
+    if (mongoose.connection.readyState === 0) {
+      const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ridegrid';
+      await mongoose.connect(mongoUri);
+    }
+  });
+
+  afterAll(async () => {
+    await mongoose.connection.close();
+    await redisClient.quit();
+  });
+
+  beforeEach(async () => {
+    await User.deleteMany({});
+    
+    // Register
+    await request(app)
+      .post('/api/auth/register')
+      .send(userData);
+
+    // Login to get tokens
+    const loginRes = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: userData.email,
+        password: userData.password
+      });
+
+    loginData = loginRes.body.data;
+  });
+
+  it('should rotate the refresh token and return a new access token', async () => {
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: loginData.refreshToken });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toHaveProperty('accessToken');
+    expect(res.body.data).toHaveProperty('refreshToken');
+    
+    // Verify refresh token is rotated (different values)
+    expect(res.body.data.refreshToken).not.toBe(loginData.refreshToken);
+
+    // Check DB state
+    const userInDb = await User.findOne({ email: userData.email }).select('+refreshToken');
+    expect(userInDb.refreshToken).toBe(res.body.data.refreshToken);
+  });
+
+  it('should return 401 if refresh token is invalid', async () => {
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: 'invalid-token-value' });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('should reject refresh token reuse and invalidate the user session', async () => {
+    // 1st rotation: valid
+    const firstRes = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: loginData.refreshToken });
+
+    expect(firstRes.statusCode).toBe(200);
+    const newRefreshToken = firstRes.body.data.refreshToken;
+
+    // 2nd rotation using the SAME old token (reuse attempt)
+    const reuseRes = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: loginData.refreshToken });
+
+    expect(reuseRes.statusCode).toBe(401);
+    expect(reuseRes.body.error.message).toContain('reuse');
+
+    // Confirm that the current valid refresh token is also invalidated in DB
+    const userInDb = await User.findOne({ email: userData.email }).select('+refreshToken');
+    expect(userInDb.refreshToken).toBeUndefined();
+
+    // Confirm that using the previously valid new token now fails too
+    const failRes = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: newRefreshToken });
+
+    expect(failRes.statusCode).toBe(401);
+  });
+
+  it('should logout successfully and clear refresh token', async () => {
+    const logoutRes = await request(app)
+      .post('/api/auth/logout')
+      .send({ refreshToken: loginData.refreshToken });
+
+    expect(logoutRes.statusCode).toBe(200);
+    expect(logoutRes.body.success).toBe(true);
+
+    // Verify database token is cleared
+    const userInDb = await User.findOne({ email: userData.email }).select('+refreshToken');
+    expect(userInDb.refreshToken).toBeUndefined();
+
+    // Verify subsequent refresh fails
+    const refreshRes = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: loginData.refreshToken });
+
+    expect(refreshRes.statusCode).toBe(401);
+  });
+});

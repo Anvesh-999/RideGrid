@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import User from '../users/user.model.js';
 import { ConflictError, UnauthorizedError } from '../../utils/errors.js';
 
@@ -22,7 +23,7 @@ export const generateTokens = (user) => {
     expiresIn: getAccessExpiry()
   });
 
-  const refreshToken = jwt.sign({ userId: user._id }, getRefreshSecret(), {
+  const refreshToken = jwt.sign({ userId: user._id, jti: uuidv4() }, getRefreshSecret(), {
     expiresIn: getRefreshExpiry()
   });
 
@@ -102,4 +103,67 @@ export const login = async (email, password) => {
     user: userJson,
     ...tokens
   };
+};
+
+/**
+ * Rotate a valid refresh token: validates old token, generates new pair, invalidates old token
+ */
+export const rotateRefreshToken = async (oldToken) => {
+  let decoded;
+  try {
+    decoded = jwt.verify(oldToken, getRefreshSecret());
+  } catch (err) {
+    throw new UnauthorizedError('Invalid or expired refresh token');
+  }
+
+  // Find user and select refresh token
+  const user = await User.findById(decoded.userId).select('+refreshToken');
+  
+  if (!user) {
+    throw new UnauthorizedError('User not found');
+  }
+
+
+
+  // Detect token reuse: if oldToken doesn't match stored token
+  if (!user.refreshToken || user.refreshToken !== oldToken) {
+    // Clear token as a safety precaution and force re-login
+    user.refreshToken = undefined;
+    await user.save();
+    throw new UnauthorizedError('Token reuse detected. Please login again.');
+  }
+
+  // Generate new tokens
+  const tokens = generateTokens(user);
+
+  // Store new refresh token
+  user.refreshToken = tokens.refreshToken;
+  await user.save();
+
+  // Format user output
+  const userJson = user.toJSON();
+  delete userJson.password;
+  delete userJson.refreshToken;
+
+  return {
+    user: userJson,
+    ...tokens
+  };
+};
+
+/**
+ * Invalidate a user's session by clearing their refresh token
+ */
+export const logoutByToken = async (token) => {
+  let decoded;
+  try {
+    decoded = jwt.verify(token, getRefreshSecret());
+    const user = await User.findById(decoded.userId);
+    if (user) {
+      user.refreshToken = undefined;
+      await user.save();
+    }
+  } catch (err) {
+    // Fail silently on token validation errors during logout
+  }
 };

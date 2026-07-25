@@ -41,3 +41,55 @@ export const login = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Handle token refresh requests
+ */
+export const refresh = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    logger.info('[Auth] Token refresh request received', { requestId: req.id });
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'REFRESH_TOKEN_REQUIRED',
+          message: 'Refresh token is required.'
+        }
+      });
+    }
+
+    const result = await authService.rotateRefreshToken(refreshToken);
+
+    logger.info(`[Auth] Token refresh successful for user ID: ${result.user.id || result.user._id}`, { requestId: req.id });
+
+    res.status(200).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Handle user logout requests
+ */
+export const logout = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    logger.info('[Auth] Logout request received', { requestId: req.id });
+
+    if (refreshToken) {
+      await authService.logoutByToken(refreshToken);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
