@@ -1,11 +1,13 @@
 import mongoose from 'mongoose';
 import app from './app.js';
 import connectDB from './config/db.js';
+import { connectRedis, redisClient } from './config/redis.js';
 
 const PORT = process.env.PORT || 5000;
 
-// Initialize database connection
+// Initialize database & cache connections
 await connectDB();
+await connectRedis();
 
 const server = app.listen(PORT, () => {
   console.log(`[Server] RideGrid dispatch engine running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
@@ -20,6 +22,13 @@ const shutdown = async () => {
     console.log('[Database] MongoDB connection closed.');
   } catch (err) {
     console.error(`[Database] Error closing MongoDB connection: ${err.message}`);
+  }
+
+  try {
+    await redisClient.quit();
+    console.log('[Cache] Redis connection closed.');
+  } catch (err) {
+    console.error(`[Cache] Error closing Redis connection: ${err.message}`);
   }
 
   server.close(() => {

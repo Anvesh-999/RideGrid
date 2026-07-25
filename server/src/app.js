@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import { redisClient } from './config/redis.js';
 
 // Load environment variables
 dotenv.config();
@@ -26,15 +27,22 @@ app.get('/health', (req, res) => {
   };
 
   const isDbConnected = dbStatus === 1;
+  const isRedisConnected = redisClient.isReady;
 
-  res.status(isDbConnected ? 200 : 503).json({
-    status: isDbConnected ? 'UP' : 'DEGRADED',
+  const isHealthy = isDbConnected && isRedisConnected;
+
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'UP' : 'DEGRADED',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     services: {
       database: {
         status: dbStates[dbStatus] || 'unknown',
         connected: isDbConnected
+      },
+      cache: {
+        status: isRedisConnected ? 'connected' : 'disconnected',
+        connected: isRedisConnected
       }
     }
   });
