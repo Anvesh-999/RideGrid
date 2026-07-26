@@ -542,13 +542,13 @@ function App() {
     }
 
     // Standard bounding box projection mapping to 0-100% SVG coordinates
-    const minLat = Math.min(pickLat, dropLat, carLat || pickLat) - 0.01;
-    const maxLat = Math.max(pickLat, dropLat, carLat || pickLat) + 0.01;
-    const minLng = Math.min(pickLng, dropLng, carLng || pickLng) - 0.01;
-    const maxLng = Math.max(pickLng, dropLng, carLng || pickLng) + 0.01;
+    const minLat = Math.min(pickLat, dropLat, carLat || pickLat) - 0.015;
+    const maxLat = Math.max(pickLat, dropLat, carLat || pickLat) + 0.015;
+    const minLng = Math.min(pickLng, dropLng, carLng || pickLng) - 0.015;
+    const maxLng = Math.max(pickLng, dropLng, carLng || pickLng) + 0.015;
 
-    const latRange = maxLat - minLat || 0.01;
-    const lngRange = maxLng - minLng || 0.01;
+    const latRange = maxLat - minLat || 0.015;
+    const lngRange = maxLng - minLng || 0.015;
 
     const getX = (lng) => ((lng - minLng) / lngRange) * 80 + 10;
     const getY = (lat) => 100 - (((lat - minLat) / latRange) * 80 + 10); // Invert Y for cartesian coordinates
@@ -559,50 +559,97 @@ function App() {
     const dY = getY(dropLat);
     
     let cX = null, cY = null;
+    let distanceVal = null;
+    let etaVal = null;
+
     if (carLat && carLng) {
       cX = getX(carLng);
       cY = getY(carLat);
+      const targetLat = active && active.status === 'DRIVER_ARRIVING' ? pickLat : dropLat;
+      const targetLng = active && active.status === 'DRIVER_ARRIVING' ? pickLng : dropLng;
+      distanceVal = Math.sqrt(Math.pow(carLat - targetLat, 2) + Math.pow(carLng - targetLng, 2)) * 111.32; // km
+      etaVal = Math.max(Math.ceil(distanceVal * 2), 1); // min
     }
 
     return (
-      <div className="map-canvas">
+      <div className="map-canvas" style={{ position: 'relative' }}>
         <div className="map-grid-overlay"></div>
-        <svg style={{ width: '100%', height: '100%', position: 'absolute' }}>
-          {/* Path Line */}
-          <line 
-            x1={pX} y1={pY} x2={dX} y2={dY} 
-            stroke="rgba(192, 132, 252, 0.4)" 
-            strokeWidth="3" 
-            strokeDasharray="6,4" 
-          />
+        
+        {/* Background Cyber City Road Grid */}
+        <svg style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
+          {/* Vertical streets */}
+          <line x1="20%" y1="0" x2="20%" y2="100%" stroke="rgba(255,255,255,0.03)" strokeWidth="1.5" />
+          <line x1="40%" y1="0" x2="40%" y2="100%" stroke="rgba(255,255,255,0.03)" strokeWidth="1.5" />
+          <line x1="60%" y1="0" x2="60%" y2="100%" stroke="rgba(255,255,255,0.03)" strokeWidth="1.5" />
+          <line x1="80%" y1="0" x2="80%" y2="100%" stroke="rgba(255,255,255,0.03)" strokeWidth="1.5" />
           
-          {/* Pickup Marker */}
-          <circle cx={pX} cy={pY} r="8" fill="var(--accent-green)" filter="drop-shadow(0 0 6px var(--accent-green))" />
-          <text x={pX + 12} y={pY + 4} fill="#fff" fontSize="11" fontWeight="600">PICKUP</text>
+          {/* Horizontal streets */}
+          <line x1="0" y1="20%" x2="100%" y2="20%" stroke="rgba(255,255,255,0.03)" strokeWidth="1.5" />
+          <line x1="0" y1="40%" x2="100%" y2="40%" stroke="rgba(255,255,255,0.03)" strokeWidth="1.5" />
+          <line x1="0" y1="60%" x2="100%" y2="60%" stroke="rgba(255,255,255,0.03)" strokeWidth="1.5" />
+          <line x1="0" y1="80%" x2="100%" y2="80%" stroke="rgba(255,255,255,0.03)" strokeWidth="1.5" />
+          
+          {/* Route connector path */}
+          <path 
+            d={`M ${pX}% ${pY}% L ${dX}% ${dY}%`}
+            fill="none" 
+            stroke="var(--accent-purple)" 
+            strokeWidth="3.5" 
+            strokeDasharray="8,6" 
+            opacity="0.65"
+            style={{ filter: 'drop-shadow(0 0 4px var(--accent-purple))' }}
+          />
 
-          {/* Destination Marker */}
-          <circle cx={dX} cy={dY} r="8" fill="var(--accent-red)" filter="drop-shadow(0 0 6px var(--accent-red))" />
-          <text x={dX + 12} y={dY + 4} fill="#fff" fontSize="11" fontWeight="600">DESTINATION</text>
+          {/* Pickup Marker Tower */}
+          <g transform={`translate(${pX}, ${pY})`}>
+            <circle cx="0" cy="0" r="16" fill="rgba(34,197,94,0.12)" stroke="var(--accent-green)" strokeWidth="1">
+              <animate attributeName="r" values="8;18;8" dur="3s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="0" cy="0" r="7" fill="var(--accent-green)" style={{ filter: 'drop-shadow(0 0 6px var(--accent-green))' }} />
+            <text x="12" y="4" fill="#fff" fontSize="10" fontWeight="bold" letterSpacing="0.5">PICKUP</text>
+          </g>
 
-          {/* Driver Tracker Dot */}
+          {/* Destination Marker Tower */}
+          <g transform={`translate(${dX}, ${dY})`}>
+            <circle cx="0" cy="0" r="16" fill="rgba(239,68,68,0.12)" stroke="var(--accent-red)" strokeWidth="1">
+              <animate attributeName="r" values="8;18;8" dur="3s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="0" cy="0" r="7" fill="var(--accent-red)" style={{ filter: 'drop-shadow(0 0 6px var(--accent-red))' }} />
+            <text x="12" y="4" fill="#fff" fontSize="10" fontWeight="bold" letterSpacing="0.5">DESTINATION</text>
+          </g>
+
+          {/* Glowing Vector Car Marker */}
           {cX !== null && cY !== null && (
-            <>
-              <circle cx={cX} cy={cY} r="14" fill="rgba(0, 240, 255, 0.15)" stroke="var(--accent-cyan)" strokeWidth="2">
-                <animate attributeName="r" values="10;16;10" dur="2s" repeatCount="indefinite" />
+            <g transform={`translate(${cX}, ${cY})`}>
+              <circle cx="0" cy="0" r="22" fill="rgba(0, 240, 255, 0.15)" stroke="var(--accent-cyan)" strokeWidth="1.5">
+                <animate attributeName="r" values="16;25;16" dur="2s" repeatCount="indefinite" />
               </circle>
-              <circle cx={cX} cy={cY} r="6" fill="var(--accent-cyan)" filter="drop-shadow(0 0 8px var(--accent-cyan))" />
-              <text x={cX + 12} y={cY - 8} fill="var(--accent-cyan)" fontSize="11" fontWeight="bold">DRIVER</text>
-            </>
+              {/* Styled Vector Car Icon */}
+              <rect x="-8" y="-8" width="16" height="16" rx="4" fill="var(--accent-cyan)" style={{ filter: 'drop-shadow(0 0 10px var(--accent-cyan))' }} />
+              <rect x="-4" y="-12" width="8" height="4" rx="1" fill="#fff" opacity="0.8" />
+              <circle cx="-5" cy="10" r="3" fill="#000" />
+              <circle cx="5" cy="10" r="3" fill="#000" />
+              <text x="16" y="-6" fill="var(--accent-cyan)" fontSize="10" fontWeight="bold">PILOT CAR</text>
+            </g>
           )}
         </svg>
         
-        {/* Floating coordinates dashboard */}
-        <div style={{ position: 'absolute', bottom: '1rem', left: '1rem', background: 'rgba(9,10,17,0.9)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '0.8rem' }}>
-          <div style={{ color: 'var(--text-secondary)' }}>GPS Grid Tracker:</div>
-          <div>Pickup Coords: {pickLat.toFixed(4)}, {pickLng.toFixed(4)}</div>
-          <div>Dropoff Coords: {dropLat.toFixed(4)}, {dropLng.toFixed(4)}</div>
-          {carLat && <div style={{ color: 'var(--accent-cyan)', fontWeight: 'bold' }}>Driver GPS: {carLat.toFixed(4)}, {carLng.toFixed(4)}</div>}
+        {/* Floating live metrics HUD */}
+        <div style={{ position: 'absolute', bottom: '1rem', left: '1rem', background: 'rgba(9,10,17,0.92)', padding: '0.85rem 1.25rem', borderRadius: '10px', border: '1px solid var(--glass-border)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.2rem' }}>GPS Grid Tracking System</div>
+          <div>📍 <b>Pickup:</b> {pickLat.toFixed(5)}, {pickLng.toFixed(5)}</div>
+          <div>🏁 <b>Destination:</b> {dropLat.toFixed(5)}, {dropLng.toFixed(5)}</div>
+          {carLat && <div style={{ color: 'var(--accent-cyan)', fontWeight: 'bold', marginTop: '0.15rem' }}>🚗 <b>Driver Location:</b> {carLat.toFixed(5)}, {carLng.toFixed(5)}</div>}
         </div>
+
+        {/* Floating Distance & ETA HUD */}
+        {distanceVal !== null && (
+          <div style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'rgba(9,10,17,0.92)', padding: '0.85rem 1.25rem', borderRadius: '10px', border: '1px solid var(--glass-border)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <div style={{ color: 'var(--accent-cyan)', fontSize: '0.75rem', fontWeight: 'bold' }}>📡 TRIP TELEMETRY</div>
+            <div><b>Distance:</b> {distanceVal.toFixed(2)} km</div>
+            <div><b>ETA:</b> <span style={{ color: 'var(--accent-green)', fontWeight: 'bold' }}>{etaVal} mins</span></div>
+          </div>
+        )}
       </div>
     );
   };
@@ -823,6 +870,27 @@ function App() {
                     Request Ride
                   </button>
                 )}
+
+                {/* Simulated Past Trips List */}
+                <div style={{ marginTop: '2.5rem' }}>
+                  <h3 style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '1rem', letterSpacing: '0.5px', fontWeight: 'bold' }}>Trip History Logs</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div className="glass-panel" style={{ padding: '0.85rem 1.25rem', background: 'rgba(255,255,255,0.01)', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'var(--glass-border)' }}>
+                      <div>
+                        <div style={{ fontWeight: 'bold', color: '#fff' }}>Downtown Plaza ➔ International Airport</div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem' }}>Yesterday • Completed • PREMIUM</div>
+                      </div>
+                      <span style={{ color: 'var(--accent-green)', fontWeight: 'bold', fontSize: '0.9rem' }}>$42.50</span>
+                    </div>
+                    <div className="glass-panel" style={{ padding: '0.85rem 1.25rem', background: 'rgba(255,255,255,0.01)', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'var(--glass-border)' }}>
+                      <div>
+                        <div style={{ fontWeight: 'bold', color: '#fff' }}>Railway Station ➔ Tech Park Zone C</div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem' }}>July 24, 2026 • Completed • ECONOMY</div>
+                      </div>
+                      <span style={{ color: 'var(--accent-green)', fontWeight: 'bold', fontSize: '0.9rem' }}>$15.20</span>
+                    </div>
+                  </div>
+                </div>
               </>
             ) : (
               <>
@@ -837,6 +905,24 @@ function App() {
                     {activeRide.status}
                   </span>
                 </div>
+
+                {['SEARCHING', 'DRIVER_OFFERED'].includes(activeRide.status) && (
+                  <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', marginBottom: '1.5rem', border: '1px dashed var(--accent-purple)', background: 'rgba(192,132,252,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.85rem' }}>
+                      <div className="logo-icon" style={{ animation: 'logo-glow 1.5s infinite alternate', width: '22px', height: '22px' }}></div>
+                      <span style={{ fontWeight: 'bold', color: 'var(--accent-purple)', fontSize: '0.8rem', letterSpacing: '0.5px' }}>RADAR DISPATCH ENGAGED</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <div className="animated-log-item">🛰️ Scanning radius step: 2.0km...</div>
+                      <div className="animated-log-item">🔍 Querying Redis GEO spatial index...</div>
+                      {activeRide.status === 'DRIVER_OFFERED' ? (
+                        <div className="animated-log-item" style={{ color: 'var(--accent-cyan)' }}>📲 Offering trip to nearest qualified driver...</div>
+                      ) : (
+                        <div className="animated-log-item">⏳ Waiting for drivers to accept...</div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="timeline">
                   <div className="timeline-line"></div>
@@ -963,6 +1049,22 @@ function App() {
               </form>
             ) : (
               <>
+                {/* Driver Earnings & Trip Analytics Dashboard */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '2rem' }}>
+                  <div className="glass-panel" style={{ padding: '0.85rem 0.5rem', textAlign: 'center', background: 'rgba(34,197,94,0.02)', borderColor: 'rgba(34,197,94,0.1)' }}>
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Earnings</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--accent-green)', marginTop: '0.2rem' }}>$182.40</div>
+                  </div>
+                  <div className="glass-panel" style={{ padding: '0.85rem 0.5rem', textAlign: 'center', background: 'rgba(0,240,255,0.02)', borderColor: 'rgba(0,240,255,0.1)' }}>
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Completed</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--accent-cyan)', marginTop: '0.2rem' }}>8 Trips</div>
+                  </div>
+                  <div className="glass-panel" style={{ padding: '0.85rem 0.5rem', textAlign: 'center', background: 'rgba(192,132,252,0.02)', borderColor: 'rgba(192,132,252,0.1)' }}>
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rating</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--accent-purple)', marginTop: '0.2rem' }}>4.92 ★</div>
+                  </div>
+                </div>
+
                 {/* Active Availability Management */}
                 <div style={{ marginBottom: '2rem' }}>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.75rem', fontWeight: '600' }}>Presence Status</label>
