@@ -51,6 +51,7 @@ function App() {
   const [availability, setAvailability] = useState('OFFLINE');
   const [searchingRides, setSearchingRides] = useState([]);
   const [activeDriverRide, setActiveDriverRide] = useState(null);
+  const [incomingOffer, setIncomingOffer] = useState(null);
   const [driverSimCoords, setDriverSimCoords] = useState(null);
   const [isSimulating, setIsSimulating] = useState(false);
 
@@ -82,8 +83,19 @@ function App() {
             setDriverLocation(null);
           }
         } else {
-          setActiveDriverRide(updatedRide);
+          if (updatedRide.status === 'CANCELLED' || updatedRide.status === 'NO_DRIVER_FOUND') {
+            setIncomingOffer(null);
+            setActiveDriverRide(null);
+          } else {
+            setActiveDriverRide(updatedRide);
+          }
         }
+      });
+
+      // Listen for incoming ride offers
+      socketClient.on('ride:offer', (offer) => {
+        console.log('[Socket] Incoming ride offer:', offer);
+        setIncomingOffer(offer);
       });
 
       // Listen for driver location tracking updates
@@ -407,16 +419,20 @@ function App() {
     }
   };
 
-  const handleAcceptRide = async (rideId) => {
+  const handleAcceptRideOffer = async (rideId) => {
     try {
-      // 1. Mark ride as DRIVER_OFFERED first (strict state transition validation)
-      await transitionRideStatus(rideId, 'DRIVER_OFFERED');
-      
-      // 2. Mark ride as DRIVER_ASSIGNED
-      const ride = await transitionRideStatus(rideId, 'DRIVER_ASSIGNED', driverUser._id || driverUser.id);
-      
-      if (ride) {
+      const res = await fetch(`${API_BASE}/rides/${rideId}/accept`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const resData = await res.json();
+      if (resData.success) {
+        const ride = resData.data;
         setActiveDriverRide(ride);
+        setIncomingOffer(null);
         setDriverSimCoords({
           latitude: ride.pickup.latitude - 0.008,
           longitude: ride.pickup.longitude - 0.008
@@ -426,6 +442,30 @@ function App() {
         if (socket) {
           socket.emit('join', { room: `ride:tracking:${user._id || user.id}` });
         }
+      } else {
+        alert(resData.error?.message || 'Accept error');
+        setIncomingOffer(null);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRejectRideOffer = async (rideId) => {
+    try {
+      const res = await fetch(`${API_BASE}/rides/${rideId}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const resData = await res.json();
+      if (resData.success) {
+        setIncomingOffer(null);
+      } else {
+        alert(resData.error?.message || 'Reject error');
+        setIncomingOffer(null);
       }
     } catch (err) {
       console.error(err);
@@ -941,7 +981,35 @@ function App() {
                   <div>
                     <h3 style={{ fontSize: '1rem', color: '#fff', marginBottom: '1rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem' }}>Available Ride Requests</h3>
                     
-                    {availability !== 'AVAILABLE' ? (
+                    {incomingOffer ? (
+                      <div className="glass-panel" style={{ padding: '1.5rem', background: 'rgba(192, 132, 252, 0.08)', borderColor: 'var(--accent-purple)', animation: 'pulse 2.5s infinite' }}>
+                        <h3 style={{ fontSize: '1.1rem', color: 'var(--accent-purple)', marginBottom: '0.75rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          ⚡ INCOMING RIDE OFFER
+                        </h3>
+                        
+                        <div style={{ fontSize: '0.85rem', marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+                          <div style={{ marginBottom: '0.4rem' }}><b>Pickup:</b> {incomingOffer.pickup.address}</div>
+                          <div style={{ marginBottom: '0.4rem' }}><b>Destination:</b> {incomingOffer.destination.address}</div>
+                          <div style={{ marginBottom: '0.4rem' }}><b>Fare Estimate:</b> <span style={{ color: 'var(--accent-green)', fontWeight: 'bold' }}>${incomingOffer.fare.toFixed(2)}</span></div>
+                          <div><b>Class:</b> <span className="status-badge status-badge-cyan">{incomingOffer.vehicleType || 'ECONOMY'}</span></div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                          <button 
+                            onClick={() => handleAcceptRideOffer(incomingOffer.rideId)}
+                            className="btn-cyan" style={{ flex: 1, padding: '0.6rem', fontSize: '0.85rem' }}
+                          >
+                            Accept Offer
+                          </button>
+                          <button 
+                            onClick={() => handleRejectRideOffer(incomingOffer.rideId)}
+                            className="btn-outline" style={{ flex: 1, padding: '0.6rem', fontSize: '0.85rem', borderColor: 'var(--accent-red)', color: 'var(--accent-red)' }}
+                          >
+                            Reject Offer
+                          </button>
+                        </div>
+                      </div>
+                    ) : availability !== 'AVAILABLE' ? (
                       <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '1rem 0' }}>
                         Go ONLINE and set state to <b>AVAILABLE</b> to receive incoming ride dispatch offers.
                       </p>
@@ -962,7 +1030,7 @@ function App() {
                               <div><b>To:</b> {ride.destination.address}</div>
                             </div>
                             <button 
-                              onClick={() => handleAcceptRide(ride._id)}
+                              onClick={() => handleAcceptRideOffer(ride._id)}
                               className="btn-cyan" style={{ padding: '0.5rem', fontSize: '0.85rem' }}
                             >
                               Accept Ride Offer

@@ -83,6 +83,26 @@ export const initSocket = (server) => {
       }
     });
 
+    socket.on('ride:accept', async (data) => {
+      const { rideId } = data;
+      try {
+        const { handleDriverAccept } = await import('../modules/dispatch/dispatch.service.js');
+        await handleDriverAccept(rideId, userId);
+      } catch (err) {
+        socket.emit('error', { message: err.message });
+      }
+    });
+
+    socket.on('ride:reject', async (data) => {
+      const { rideId } = data;
+      try {
+        const { handleDriverReject } = await import('../modules/dispatch/dispatch.service.js');
+        await handleDriverReject(rideId, userId);
+      } catch (err) {
+        socket.emit('error', { message: err.message });
+      }
+    });
+
     socket.on('disconnect', () => {
       logger.info(`[Socket] Connection disconnected. User ID: ${userId}, Socket ID: ${socket.id}`);
       userSocketMap.delete(userId);
@@ -143,3 +163,12 @@ export const leaveRoom = (userId, roomName) => {
   }
   return false;
 };
+
+/**
+ * Check if a user has an active socket connection
+ */
+export const isUserConnected = (userId) => {
+  if (!userId) return false;
+  return userSocketMap.has(userId.toString());
+};
+

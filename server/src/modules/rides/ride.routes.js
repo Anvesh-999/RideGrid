@@ -19,4 +19,8 @@ router.get('/:id', rideController.getDetails);
 router.patch('/:id/status', rideController.transitionStatus);
 router.post('/:id/cancel', rideController.cancel);
 
+// Driver offer accept/reject endpoints (restricted to DRIVER role)
+router.post('/:id/accept', authorize('DRIVER'), rideController.acceptOffer);
+router.post('/:id/reject', authorize('DRIVER'), rideController.rejectOffer);
+
 export default router;

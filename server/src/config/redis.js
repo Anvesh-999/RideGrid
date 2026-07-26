@@ -50,6 +50,12 @@ class MockRedisClient {
   }
 
   async set(key, value, options = {}) {
+    if (options.NX) {
+      const existing = await this.get(key);
+      if (existing !== null) {
+        return null;
+      }
+    }
     let expiresAt = null;
     if (options.EX) {
       expiresAt = Date.now() + options.EX * 1000;

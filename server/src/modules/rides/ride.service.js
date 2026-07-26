@@ -1,6 +1,7 @@
 import Ride from './ride.model.js';
 import * as fareService from '../fares/fare.service.js';
 import { NotFoundError, BadRequestError } from '../../utils/errors.js';
+import logger from '../../utils/logger.js';
 
 // State machine allowed transitions
 const ALLOWED_TRANSITIONS = {
@@ -14,6 +15,26 @@ const ALLOWED_TRANSITIONS = {
   COMPLETED: [],
   CANCELLED: [],
   NO_DRIVER_FOUND: []
+};
+
+/**
+ * Release reserved/busy driver back to AVAILABLE or OFFLINE
+ */
+const releaseDriver = async (driverId) => {
+  try {
+    const DriverProfile = (await import('../drivers/driverProfile.model.js')).default;
+    const { redisClient } = await import('../../config/redis.js');
+
+    const profile = await DriverProfile.findOne({ userId: driverId });
+    if (profile) {
+      profile.availabilityStatus = profile.onlineStatus === 'ONLINE' ? 'AVAILABLE' : 'OFFLINE';
+      await profile.save();
+    }
+    await redisClient.del(`driver:reservation:${driverId}`);
+    logger.info(`[Ride] Released driver ${driverId} status to ${profile?.availabilityStatus || 'OFFLINE'}`);
+  } catch (err) {
+    logger.error(`[Ride] Error releasing driver ${driverId}: ${err.message}`);
+  }
 };
 
 /**
@@ -84,6 +105,14 @@ export const transitionRideStatus = async (rideId, targetStatus, metadata = {}) 
 
   // Apply lifecycle timestamps & metadata updates
   switch (targetStatus) {
+    case 'SEARCHING':
+      ride.driverId = null;
+      break;
+    case 'DRIVER_OFFERED':
+      if (metadata.driverId) {
+        ride.driverId = metadata.driverId;
+      }
+      break;
     case 'DRIVER_ASSIGNED':
       if (!metadata.driverId) {
         throw new BadRequestError('driverId is required when assigning a driver.');
@@ -99,6 +128,10 @@ export const transitionRideStatus = async (rideId, targetStatus, metadata = {}) 
       break;
     case 'COMPLETED':
       ride.completedAt = new Date();
+      if (ride.driverId) {
+        const driverId = ride.driverId._id || ride.driverId;
+        await releaseDriver(driverId);
+      }
       break;
     case 'CANCELLED':
       if (!metadata.actor) {
@@ -109,10 +142,25 @@ export const transitionRideStatus = async (rideId, targetStatus, metadata = {}) 
         reason: metadata.reason || '',
         timestamp: new Date()
       };
+      if (ride.driverId) {
+        const driverId = ride.driverId._id || ride.driverId;
+        await releaseDriver(driverId);
+      }
       break;
   }
 
   await ride.save();
+
+  // If transitioned to SEARCHING, trigger automated geospatial matching loop in background after brief delay
+  if (targetStatus === 'SEARCHING') {
+    setTimeout(() => {
+      import('../dispatch/dispatch.service.js').then((dispatchModule) => {
+        dispatchModule.processRide(rideId);
+      }).catch((err) => {
+        logger.error(`[Dispatch] Failed to trigger dispatch loop for ride ${rideId}: ${err.message}`);
+      });
+    }, 50);
+  }
 
   // Return populated details
   return getRideById(rideId);

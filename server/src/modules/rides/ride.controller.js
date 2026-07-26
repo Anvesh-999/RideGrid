@@ -157,3 +157,57 @@ export const getRides = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Handle driver accepting a ride offer
+ */
+export const acceptOffer = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const driverId = req.user.userId;
+
+    logger.info(`[Ride] Driver ${driverId} accepting offer for ride ${id}`, { requestId: req.id });
+
+    const { handleDriverAccept } = await import('../dispatch/dispatch.service.js');
+    await handleDriverAccept(id, driverId);
+
+    logger.info(`[Ride] Ride ID: ${id} successfully accepted by driver ${driverId}`, { requestId: req.id });
+
+    // Fetch and return updated ride
+    const ride = await rideService.getRideById(id);
+
+    res.status(200).json({
+      success: true,
+      data: ride
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Handle driver rejecting a ride offer
+ */
+export const rejectOffer = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const driverId = req.user.userId;
+
+    logger.info(`[Ride] Driver ${driverId} rejecting offer for ride ${id}`, { requestId: req.id });
+
+    const { handleDriverReject } = await import('../dispatch/dispatch.service.js');
+    await handleDriverReject(id, driverId);
+
+    logger.info(`[Ride] Ride ID: ${id} successfully rejected by driver ${driverId}`, { requestId: req.id });
+
+    // Fetch and return updated ride
+    const ride = await rideService.getRideById(id);
+
+    res.status(200).json({
+      success: true,
+      data: ride
+    });
+  } catch (error) {
+    next(error);
+  }
+};
