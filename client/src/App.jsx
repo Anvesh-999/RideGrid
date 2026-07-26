@@ -381,13 +381,23 @@ function App() {
   const handleRegisterVehicle = async (e) => {
     e.preventDefault();
     try {
+      const modelParts = vehicleForm.model.trim().split(' ');
+      const make = modelParts[0] || 'Generic';
+      const capacity = vehicleForm.type === 'BIKE' ? 1 : (vehicleForm.type === 'AUTO' ? 3 : 4);
+
+      const payload = {
+        ...vehicleForm,
+        make,
+        capacity
+      };
+
       const res = await fetch(`${API_BASE}/drivers/me/vehicle`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(vehicleForm)
+        body: JSON.stringify(payload)
       });
       const resData = await res.json();
       if (resData.success) {
