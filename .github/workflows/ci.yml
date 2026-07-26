@@ -61,7 +61,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd client
-        npm ci
+        npm install
 
     - name: Run frontend linter
       run: |
