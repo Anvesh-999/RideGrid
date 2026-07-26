@@ -999,7 +999,30 @@ function App() {
                   </div>
                 </div>
 
-                {['REQUESTED', 'SEARCHING', 'DRIVER_OFFERED', 'DRIVER_ASSIGNED'].includes(activeRide.status) && (
+                {activeRide.status === 'NO_DRIVER_FOUND' && (
+                  <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid var(--accent-red)', padding: '0.85rem', borderRadius: '8px', marginBottom: '1.25rem', color: 'var(--accent-red)', fontSize: '0.85rem', textAlign: 'center', fontWeight: '500' }}>
+                    ⚠️ No available drivers found. Please try booking again.
+                  </div>
+                )}
+                {activeRide.status === 'CANCELLED' && (
+                  <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid var(--accent-amber)', padding: '0.85rem', borderRadius: '8px', marginBottom: '1.25rem', color: 'var(--accent-amber)', fontSize: '0.85rem', textAlign: 'center', fontWeight: '500' }}>
+                    ℹ️ This booking has been cancelled.
+                  </div>
+                )}
+                {activeRide.status === 'COMPLETED' && (
+                  <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid var(--accent-green)', padding: '0.85rem', borderRadius: '8px', marginBottom: '1.25rem', color: 'var(--accent-green)', fontSize: '0.85rem', textAlign: 'center', fontWeight: '500' }}>
+                    🎉 Journey completed successfully! Thank you for using RideGrid.
+                  </div>
+                )}
+
+                {['COMPLETED', 'CANCELLED', 'NO_DRIVER_FOUND'].includes(activeRide.status) ? (
+                  <button 
+                    onClick={() => { setActiveRide(null); setDriverLocation(null); }}
+                    className="btn-cyan"
+                  >
+                    Book Another Ride
+                  </button>
+                ) : (
                   <button 
                     onClick={() => handleCancelRide(activeRide._id)}
                     className="btn-outline" style={{ borderColor: 'var(--accent-red)', color: 'var(--accent-red)' }}
