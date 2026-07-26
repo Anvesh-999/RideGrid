@@ -248,8 +248,15 @@ function App() {
       });
       const resData = await res.json();
       if (resData.success) {
-        setVehicle(resData.data.vehicleId);
-        setAvailability(resData.data.availability);
+        const prof = resData.data;
+        setVehicle(prof.vehicleId);
+        if (prof.availabilityStatus === 'OFFLINE' || prof.onlineStatus === 'OFFLINE') {
+          setAvailability('OFFLINE');
+        } else if (prof.availabilityStatus === 'AVAILABLE') {
+          setAvailability('AVAILABLE');
+        } else {
+          setAvailability('ONLINE');
+        }
       }
     } catch (err) {
       console.error(err);
@@ -410,17 +417,33 @@ function App() {
 
   const handleAvailabilityToggle = async (target) => {
     try {
+      const payload = {};
+      if (target === 'OFFLINE') {
+        payload.availabilityStatus = 'OFFLINE';
+      } else if (target === 'ONLINE') {
+        payload.onlineStatus = 'ONLINE';
+      } else if (target === 'AVAILABLE') {
+        payload.availabilityStatus = 'AVAILABLE';
+      }
+
       const res = await fetch(`${API_BASE}/drivers/status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ availability: target })
+        body: JSON.stringify(payload)
       });
       const resData = await res.json();
       if (resData.success) {
-        setAvailability(resData.data.availability);
+        const prof = resData.data;
+        if (prof.availabilityStatus === 'OFFLINE' || prof.onlineStatus === 'OFFLINE') {
+          setAvailability('OFFLINE');
+        } else if (prof.availabilityStatus === 'AVAILABLE') {
+          setAvailability('AVAILABLE');
+        } else {
+          setAvailability('ONLINE');
+        }
       } else {
         alert(resData.error?.message || 'Error changing status');
       }
